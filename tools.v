@@ -1,4 +1,6 @@
 (* Setup file for all proof automation tools and other useful things *)
+Declare ML Module "recdef_plugin".
+Declare ML Module "rippling_plugin".
 Require Import List.
 Require Export Syntax. (* put after "Import List" for [1;2] style list notation *)
 Require Import Program.
@@ -206,7 +208,7 @@ Ltac simp_basic := repeat progress simp_basic'.
 
 Print HintDb core.
 
-Hint Resolve conj eq_refl eq_sym : cache.
+Hint Resolve conj @eq_refl eq_sym : cache.
 
 Ltac triv' :=
   try tauto;

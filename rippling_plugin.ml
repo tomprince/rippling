@@ -210,9 +210,9 @@ let constr_display csr =
   | Evar (e,l) -> "Evar("^(string_of_int e)^","^(array_display l)^")"
   | Const c -> "Const("^(string_of_con c)^")"
   | Ind (sp,i) ->
-      "MutInd("^(string_of_kn sp)^","^(string_of_int i)^")"
+      "MutInd("^(string_of_mind sp)^","^(string_of_int i)^")"
   | Construct ((sp,i),j) ->
-      "MutConstruct(("^(string_of_kn sp)^","^(string_of_int i)^"),"
+      "MutConstruct(("^(string_of_mind sp)^","^(string_of_int i)^"),"
       ^(string_of_int j)^")"
   | Case (ci,p,c,bl) ->
       "MutCase(<abs>,"^(term_display p)^","^(term_display c)^","
@@ -358,7 +358,7 @@ open Format
   | ("Coq"::_::l) -> l
   | l             -> l
     in  List.iter (fun x -> print_string x; print_string ".") ls;*)
-      print_string (string_of_kn sp)
+      print_string (string_of_mind sp)
   and sp_con_display sp =
 (*    let dir,l = decode_kn sp in
     let ls =
@@ -474,7 +474,7 @@ let coq_0 = lazy (constant "O")
 let coq_S = lazy (constant "S")
 
 let get_fresh_theorem_name prefix =
-  next_global_ident_away false (id_of_string prefix) (Pfedit.get_all_proof_names ())
+  Namegen.next_global_ident_away (id_of_string prefix) (Pfedit.get_all_proof_names ())
 
 let rec take n x =
   match n, x with
@@ -1235,6 +1235,19 @@ let rewrite_at rewrite orient position g =
     (nth r n) g
 
 (****************)
+let my_occur_var id c =
+        let rec occur_rec c =
+                match kind_of_term c with
+                | Var i -> if id == i then raise Occur
+                | _ -> iter_constr occur_rec c
+  in
+  try occur_rec c; false with
+  Occur -> true
+
+
+let occur_id id c =
+        (my_occur_var id c) || not (noccurn 1 c)
+
 
 (*
 Implements the delayed generalisation algorithm to remove superflous assumptions from a cached lemma
@@ -1250,10 +1263,8 @@ let rec remove_unused_lambdas r ty =
           (* Check if the lambda term is used. As the lambda term variable could be referred
           to with Rel, we cannot just check for Var id terms. *)
           let (c,pc) = remove_unused_lambdas c pc in
-          let lifted = lift (1) c in
-          let liftedp = lift (1) pc in
-          let lambda_used = occur_id [name] id lifted in
-          let lambda_usedp = occur_id [name] id liftedp in
+          let lambda_used = occur_id id c in
+          let lambda_usedp = occur_id id pc in
           (if lambda_used || lambda_usedp then
             (* Keep this lambda term *)
             (mkLambda (name, t, c), mkProd (pa,pb,pc))
@@ -1329,7 +1340,7 @@ let auto_add_hint id base g =
            create a temporary subgoal that is processed by Ltac *)
         let constant_lhs = ref false in
         let constant_rhs = ref false in
-        let arg = valueIn (VConstr lemma_type) in
+        let arg = valueIn (VConstr ([],lemma_type)) in
         ignore (tclTHENSEQ [
           (interp <:tactic< let x := $arg in assert x; clear; intros >>);
           tclTRY (tclTHEN (interp <:tactic< constant_lhs >>) (fun g -> constant_lhs := true; tclIDTAC g));
@@ -1458,7 +1469,7 @@ let can_fertilise annotated_term g =
 
 let fertilise_with_all givens =
   let s = map (fun x ->
-  let arg = valueIn (VConstr x) in
+  let arg = valueIn (VConstr ([],x)) in
   (interp <:tactic<( (fert2 $arg); let x := $arg in clear x)>>)) givens in
   tclTHENSEQ s
 
@@ -1625,7 +1636,7 @@ in
       (match given with
       [] -> anomaly("given expected")
       | x::_ ->
-        let arg = valueIn (VConstr x.id) in
+        let arg = valueIn (VConstr ([],x.id)) in
         (interp <:tactic<let a := $arg in apply a>>)) (* "apply" will instantiate sinks, unlike "assumption" *)
       (fun () -> dmsg 0 (str "Strong fertilized!")) g
   in
@@ -2004,7 +2015,7 @@ let generate_function_wave_rules fun_name add_to_db =
     | _ -> assert false (* we can only have non empty  list *));
   (*****)
 
-  Command.start_proof
+  Lemmas.start_proof
     (get_fresh_theorem_name "dummy")
     (Decl_kinds.Global,(Decl_kinds.Proof Decl_kinds.Theorem))
     (Typeops.type_of_constant(*Environ.constant_value*) (Global.env())
@@ -2027,7 +2038,7 @@ let generate_function_wave_rules fun_name add_to_db =
             (lemma_cache ((Libnames.string_of_reference fun_name)^"_waverule")
                  (interp <:tactic<try reflexivity; try tauto>>) (Some ripple_basic_db))
           ]);
-  Command.save_named false;
+  Lemmas.save_named false;
   ()
 
 VERNAC COMMAND EXTEND AddWaveRule

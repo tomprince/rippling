@@ -291,6 +291,7 @@ AddWaveRule postorder.
 AddWaveRule preorder.
 AddWaveRule inorder.
 AddWaveRule height.
+Require Import Arith.MinMax.
 AddWaveRule max.
 
 (* In these proofs, the "ripple" tactic must consider two inductive hypotheses
