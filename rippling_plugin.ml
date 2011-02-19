@@ -570,7 +570,7 @@ END
 (* Returns LHS, RHS and clenv for an equation *)
 let analyse_hypothesis gl c =
  let ctype = pf_type_of gl c in
- let eqclause  = Clenv.make_clenv_binding gl (c,ctype) Rawterm.NoBindings in
+ let eqclause  = Clenv.make_clenv_binding gl (c,ctype) Glob_term.NoBindings in
  let (equiv, args) = decompose_app (Clenv.clenv_type eqclause) in
  let rec split_last_two = function
    | [c1;c2] -> [],(c1, c2)
@@ -583,7 +583,7 @@ let analyse_hypothesis gl c =
 (* FIXME: refactor analyse_hypothesis and analyse_hypothesis2 *)
 let analyse_hypothesis2 gl c =
  let ctype = c in
- let eqclause  = Clenv.make_clenv_binding gl (c,ctype) Rawterm.NoBindings in
+ let eqclause  = Clenv.make_clenv_binding gl (c,ctype) Glob_term.NoBindings in
  let (equiv, args) = decompose_app (Clenv.clenv_type eqclause) in
  let rec split_last_two = function
    | [c1;c2] -> [],(c1, c2)
@@ -629,7 +629,7 @@ let indentmsg n s =
     *) (* TODO: Enable this to turn on trace logs *) ())
 
 (* Returns true if tactic call has proven all goals *)
-let all_goals_solved (g,_) = g.it = []
+let all_goals_solved g = g.it = []
 
 (* Calls tactic t and encloses its output inside XML tags (for giving proof search traces) *)
 let tag_tactic2 msg params tact g =
@@ -872,7 +872,7 @@ let annotate erasure skeleton g =
     try get [] a; true with Occur -> false in*)
 
   (* Replace universally quantified variables in skelteon with metavariables *)
-  let skeleton2 = (Clenv.make_clenv_binding g (skeleton,skeleton) Rawterm.NoBindings).templtyp.rebus in
+  let skeleton2 = (Clenv.make_clenv_binding g (skeleton,skeleton) Glob_term.NoBindings).templtyp.rebus in
   (* Generate annotations *)
   let annotations = annotate2 eq_constr false erasure skeleton2 g in
 
@@ -1289,7 +1289,7 @@ let auto_add_hint id base g =
     | _ -> ()) in
 
   let add_hints_iff l2r lc n bl =
-    Auto.add_hints true bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, x)) lc)) in
+    Auto.add_hints true bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, None, x)) lc)) in
 
   if cache_trivial_lemmas then
     (let priority = Some 0 (* "trivial" will only use priority 0 rules *) in
@@ -1320,7 +1320,7 @@ let auto_add_hint id base g =
       (match p with [| _; lhs; rhs|] ->
 
       (* Check if equation has side-conditions *)
-      let eqclause  = Clenv.make_clenv_binding g ((*optimised_term*)lemma_type,lemma_type) Rawterm.NoBindings in
+      let eqclause  = Clenv.make_clenv_binding g ((*optimised_term*)lemma_type,lemma_type) Glob_term.NoBindings in
       (* This check appears to find if instantiating the equation alone will leave any
          uninstantitated meta-variables in the rule (i.e. side-conditions) *)
       let has_side_conditions = clenv_independent eqclause <> [] in
@@ -1397,8 +1397,7 @@ let lemma_cache ?(add_as_hint=true) prefix solving_tactic base g =
     let ce =
       { Entries.const_entry_body = theorem_term;
         const_entry_type = Some theorem_type;
-        const_entry_opaque = false;
-        const_entry_boxed = Flags.boxed_definitions()}
+        const_entry_opaque = false}
     in
     ignore (Declare.declare_constant id (Entries.DefinitionEntry ce, Decl_kinds.IsDefinition (Decl_kinds.Scheme)));
     id in
@@ -1534,7 +1533,7 @@ let autorewrite_occurances base callback_tactic side_condition_tactic g =
   tclORELSESEQ rewrites g
 
 TACTIC EXTEND findrewrites
-| [ "find_rewrites" tactic(t)] -> [ autorewrite_occurances ripple_all_db (snd t) tclIDTAC]
+| [ "find_rewrites" tactic(t)] -> [ autorewrite_occurances ripple_all_db (Tacinterp.eval_tactic t) tclIDTAC]
 END
 
 (* Adds bash terminal color codes for rippling annotations *)
@@ -1918,7 +1917,7 @@ let induction_on_nth_var2 n gl =
      (* Induction could fail after we generalize. *)
       tclTHENSEQ [
         revert_except id;
-        Tactics.default_elim false (id, Rawterm.NoBindings)
+        Tactics.default_elim false (id, Glob_term.NoBindings)
       ]
      gl
 
@@ -1998,7 +1997,7 @@ let find_or_none id =
 (* Generates equations from Coq functions and optionally adds these to a lemma database *)
 let generate_function_wave_rules fun_name add_to_db =
 (* FIXME: Command disabled because it's causing makefile problems! *)
-  let fas = [((get_fresh_theorem_name "functionalinduction"),fun_name,Rawterm.RProp Term.Pos)] in
+  let fas = [((get_fresh_theorem_name "functionalinduction"),fun_name,Glob_term.GProp Term.Pos)] in
   (* Taken from indfun_main.ml4. Should refactor this. *)
   (*****)
   (try
@@ -2126,7 +2125,7 @@ END
 
 TACTIC EXTEND generalisegoal
 | [ "generalise_goal" ] -> [ generalise_goal ]
-| [ "lemma_cache" tactic(t)] -> [ lemma_cache "userhint" (snd t) (Some ripple_cached_db)]
+| [ "lemma_cache" tactic(t)] -> [ lemma_cache "userhint" (Tacinterp.eval_tactic t) (Some ripple_cached_db)]
 END
 
 TACTIC EXTEND LatexPrint
@@ -2291,11 +2290,11 @@ TACTIC EXTEND inductiveproofautomation
   in
 
   let indtact g = tag_tclORELSESEQ (induction_all ((length ((get_vars (pf_concl g))))-1)) g in
-  let tagged_easy = tag_tactic "Trivial" (tclTRY (snd easy)) in
-  let untagged_basic_gen = snd simplify in
+  let tagged_easy = tag_tactic "Trivial" (tclTRY (Tacinterp.eval_tactic easy)) in
+  let untagged_basic_gen = Tacinterp.eval_tactic simplify in
   let basic_gen = tag_tactic "Simplify" untagged_basic_gen in
   let generalise_qc =
-  tag_tactic "Generalise" (tclTHENSEQ [untagged_basic_gen; generalise_goal; snd quickcheck])
+  tag_tactic "Generalise" (tclTHENSEQ [untagged_basic_gen; generalise_goal; Tacinterp.eval_tactic quickcheck])
   in
 
   let cache x =
@@ -2313,7 +2312,7 @@ TACTIC EXTEND inductiveproofautomation
                 in
 
   let tagged_base_case = ((*tag_group "No embeddable assumptions"*)  (trivial_generalise_induction)) in
-  let ripple_tactic given = (ripple given lemma_dbs (tclTHENSEQ [snd simplify; snd easy])) in
+  let ripple_tactic given = (ripple given lemma_dbs (tclTHENSEQ [Tacinterp.eval_tactic simplify; Tacinterp.eval_tactic easy])) in
   (* ripples when embeddings are found, nothing otherwise *)
   let tagged_step_case =
     (fun g ->
@@ -2331,7 +2330,7 @@ TACTIC EXTEND inductiveproofautomation
                 (if try_simpl_fertilise then
                   (* try to solve goal with trivial tactic, otherwise try to fertilise after simpl *)
                   tclTHENSEQ [interp <:tactic<simpl>>;
-                              tclTRY(tclSOLVE[tclTHENSEQ[untagged_basic_gen; snd easy]]);
+                              tclTRY(tclSOLVE[tclTHENSEQ[untagged_basic_gen; Tacinterp.eval_tactic easy]]);
                               fertilise_with_all given]
                 else
                   tclFAIL 0 (str ""));
@@ -2697,7 +2696,7 @@ TACTIC EXTEND Echo23
           ;
           msgnl (str "");
           msgnl (str "Original proof obligation:");
-          msgnl (fix (pr_goal (sig_it g)));
+          msgnl (fix (pr_goal g));
           flush_all();
           !b
         in
