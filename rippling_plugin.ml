@@ -42,7 +42,7 @@ let cache_lemmas = true
 let cache_trivial_lemmas = true
 
 (* Maximum number of steps that can be applied in one rippling proof *)
-let max_ripple_depth = 5
+let max_ripple_depth = 10
 
 (* Rippling lemma database containing only basic definitions *)
 let ripple_basic_db = "ripple_basic"
@@ -131,54 +131,6 @@ let cartp_multi x =
   if x = [] then [] else
   let y = map (fun a -> map (fun b -> [b]) a) x in
   fold_left cartp (hd y) (tl y)
-
-(* Looks for a term of the form "match X..." in the conclusion and calls tactic "case X" if it finds one or fails *)
-(* Case splits on outermost found *)
-let case_concl2 g =
-    let term = (pf_concl g) in
-    let rec b =
-      (fun r x ->
-        match r with
-        Some _ -> r
-        | _    -> match kind_of_term x with
-                    (* Find the inner most case statement
-                       Only allow closed terms e.g. "if c then ..." instead of "fun c => if c then ..." as case splitting will
-                       fail on the latter *)
-                    Case (_,_,case_term,_) when closed0 case_term -> Some case_term
-                  | _ -> fold_constr b r x) in
-      let found = fold_constr b None term in
-    match found with
-      Some x ->
-        Hiddentac.h_simplest_case x g
-        (*let arg = valueIn (VConstr x) in (interp <:tactic<case_eq $arg; intros >>) g*)
-    | None -> tclFAIL 0 (str "No 'case' constructs found") g
-
-(* Looks for a term of the form "match X..." in the conclusion and calls tactic "case X" if it finds one or fails *)
-(* Case splits on innermost found *)
-let case_concl g =
-    let term = (pf_concl g) in
-    let rec b =
-      (fun r x ->
-        match r with
-        Some _ -> r
-        | _    -> match kind_of_term x with
-                    (* Find the inner most case statement (avoids information loss)
-                       Only allow closed terms e.g. "if c then ..." instead of "fun c => if c then ..." as case splitting will
-                       fail on the latter *)
-                    Case (_,_,case_term,_) when closed0 case_term ->
-                      (match fold_constr b r x with
-                        Some x when closed0 x -> Some x
-                       | _ -> Some case_term )
-                  | _ -> fold_constr b r x) in
-      let found = fold_constr b None term in
-    match found with
-      Some x ->
-        Hiddentac.h_simplest_case x g
-   | None -> tclFAIL 0 (str "No 'case' constructs found") g
-
-TACTIC EXTEND testtactic3224
-| [ "case_concl" ] -> [ case_concl ]
-END
 
 (*****************************************************************************)
 (* Taken from dev/top_printers.ml. Useful for seeing underlying              *)
@@ -414,6 +366,68 @@ let msgconstro x y = msgnl (str x ++ str " = " ++ Printer.pr_constr y); y
 let msgheading x = msgnl (str "\n##############  " ++ str x ++ str "  ##############")
 let msgcurrentgoal gl = msgnl ((str "\n************** Current goal: ") ++ (pr_constr (pf_concl gl)))
 let msgconstrlist c = map (fun f -> msgconstr "in list" f) c
+
+
+
+(* case splits on match statements *)
+let case_concl2 casesplit_tactic g=
+    let term = (pf_concl g) in
+(*     dmsgc 0 "case_concl term" term; *)
+    let rec b =
+      (fun r x ->
+(*       dmsgc 0 "case_concl" x; *)
+        match r with
+        Some _ -> r
+        | _    ->
+              (*(match kind_of_term x with
+                Case (_,_,case_term,_) -> dmsgc 0 "case_concl!!!" x
+                | _ -> dmsgc 0 "no match" x)
+                    ;*)
+           match kind_of_term x with
+                    (* Find the inner most case statement
+                       Only allow closed terms e.g. "if c then ..." instead of "fun c => if c then ..." as case splitting will
+                       fail on the latter *)
+                    Case (_,_,case_term,_) when closed0 case_term -> Some case_term
+                  | _ -> fold_constr b r x) in
+      (*let found = fold_constr b None term in*)
+      let found = b None term in
+
+    match found with
+      Some x ->
+(*         Hiddentac.h_simplest_case x g *)
+(*         let arg = valueIn (VConstr x) in (interp <:tactic<case_eq $arg; intros >>) g *)
+        let arg = valueIn (VConstr ([],x)) in (casesplit_tactic arg g)
+    | None -> tclFAIL 0 (str "No 'case' constructs found") g
+
+
+(* Looks for a term of the form "match X..." in the conclusion and calls tactic "case X" if it finds one or fails *)
+(* Case splits on innermost found *)
+let case_concl g =
+    let term = (pf_concl g) in
+    let rec b =
+      (fun r x ->
+        match r with
+        Some _ -> r
+        | _    -> match kind_of_term x with
+                    (* Find the inner most case statement (avoids information loss)
+                       Only allow closed terms e.g. "if c then ..." instead of "fun c => if c then ..." as case splitting will
+                       fail on the latter *)
+                    Case (_,_,case_term,_) when closed0 case_term ->
+                      (match fold_constr b r x with
+                        Some x when closed0 x -> Some x
+                       | _ -> Some case_term )
+                  | _ -> fold_constr b r x) in
+      (*let found = fold_constr b None term in*)
+      let found = b None term in
+    match found with
+      Some x ->
+        Hiddentac.h_simplest_case x g
+   | None -> tclFAIL 0 (str "No 'case' constructs found") g
+
+TACTIC EXTEND testtactic3224
+| [ "case_concl" ] -> [ case_concl2 (fun arg -> (interp <:tactic<case_eq' $arg >>)) ]
+END
+
 
 (* FIXME: These references should be loaded from a theory file. Having trouble with module visability *)
 let wave_out = ref (mkRel 1)
@@ -1127,8 +1141,8 @@ let rec remove_duplicates eq =
 let rec removeconstrdups = remove_duplicates eq_constr
 
 (*****
-Code for a tactic that gives similar behaviour to the new "rewrite X at n" tactic. The latter should really
-be replaced with the former in the future.
+Code for a tactic that gives similar behaviour to the new "rewrite X at n" tactic. The use of the fomer should really
+be replaced with the use of the latter in the future.
 *****)
 
 let unification_rewrite rewriterule_lhs c2 cl term_to_rewrite gl =
@@ -1645,7 +1659,9 @@ in
      no longer embed but have trivial proofs *)
   let case_split =
        tclTHENSEQ [
-         case_concl;
+         (*case_concl;*)
+         (* Allow any case splits possible *)
+         (case_concl2 (fun arg -> (interp <:tactic<case_eq2 $arg >>)));
          interp <:tactic<intros; try subst>>
          ] in
 
@@ -1756,6 +1772,7 @@ in
          tclORELSESEQ[
           autorewrite_occurances bas callback side_condition_tactic; (* look for other ripple steps... *)
           fertilise given (* ...and try fertilisation when there are none *)
+(*           tclTHENSEQ[fertilise given; (fun g -> dmsg 0 ((str "ripple depth ") ++ (str (string_of_int depth))); tclIDTAC g) ] *)
           ] g)
       in
 
@@ -1783,14 +1800,25 @@ in
     tclFAIL 0 (str "All supplied givens do not initially embed into the conclusion") g
   else
   (
+(*
     let ripple_step =
       (* can sometimes fertilise before performing ripple steps *)
       tclTHENSEQ[tclTRY (strong_fertilise given3);
       go given3 bas 1 initial_conclusion;
       tclTRY (fertilise given3)]
       in
-
     autorewrite_occurances bas ripple_step side_condition_tactic g
+*)
+
+    let ripple_step =
+      (* can sometimes fertilise before performing ripple steps *)
+      tclTHENSEQ[
+      go given3 bas 1 initial_conclusion;
+      tclTRY (fertilise given3)]
+      in
+      tclTHENSEQ[tclTRY (strong_fertilise given3);
+    autorewrite_occurances bas ripple_step side_condition_tactic] g
+
   )
 
 let rippling bas given side_condition_tactic =
@@ -2023,14 +2051,14 @@ let generate_function_wave_rules fun_name add_to_db =
        ))))
     (fun _ _ -> ());
 
-  let case_split = tclTHENSEQ [
+     let case_split = tclTHENSEQ [
            interp <:tactic<intros>>;
-           case_concl2; (* FIXME: not sure why, but it fails when splitting on innermost case *)
-           interp <:tactic<intros; try subst>>] in
+           case_concl2 (fun arg -> (interp <:tactic<case_eq2 $arg >>))] in (* FIXME: not sure why, but it fails when splitting on innermost case *)
+(*            interp <:tactic<intros; try subst>>] in *)
 
       Pfedit.by (
          tclTHENSEQ [
-         tclPRINTGOAL "Top-level goal: ";
+         (*tclPRINTGOAL "Top-level goal: ";*)
           interp <:tactic<intros>>;
           tclTRY case_split;
           tclPRINTGOAL "Subgoal: ";
@@ -2360,20 +2388,35 @@ TACTIC EXTEND inductiveproofautomation
 
   in
 
-  (*let starttime = Unix.times() in*)
-  let finished() =
-    (* FIXME: does this line cause problems when you turn off logging? *)
-    (*
-    Printf.fprintf !logfile "<time duration=\"%3.2f\"/>"
-      ((Unix.times()).Unix.tms_utime -. starttime.Unix.tms_utime);
-    *)
-
-    log_write "</proof>";
-    close_logfile(); dmsg 1 (str "#### closing logfile") in
+  let proofname = (string_of_id (Pfedit.get_current_proof_name())) in
 
   fun g ->
+
+    let starttime = Unix.times() in
+    let finished message =
+     let s = Printf.sprintf " duration=\"%3.2f\"/>"
+      ((Unix.times()).Unix.tms_utime -. starttime.Unix.tms_utime)in
+
+     pp (*indentmsg !indent_level *)((str "<") ++ (str message) ++ (str s) ++   (pr_constr (pf_concl g)));
+    log_write "</proof>";
+
+    let s = Printf.sprintf " %3.2f"
+      ((Unix.times()).Unix.tms_utime -. starttime.Unix.tms_utime) in
+
+      (*
+    indentmsg 0 ((str "\nBenchmark data: ") ++ (str ( proofname ^ " \"")) ++ (str message) ++ (str s) ++ (pr_constr (pf_concl g)) ++ (str "\" ") ++ (str "\n"));
+    *)
+
+(*let cg = string_of_ppcmds (pr_constr (pf_concl g)) in*)
+let cg = "cannot display" in (* for some reason the above line causes a crash running the tactic within different modules*)
+
+let cg = Str.global_replace (Str.regexp "\n") "" cg in (* workaround to remove newlines string_of_ppcmds adds sometimes*)
+indentmsg 0 ((str "\nBenchmark data: ") ++ (str ( proofname ^ " ")) ++ (str message) ++ (str s) ++ (str " \"") ++ (str cg) ++ (str " ")  ++ (str "\" ") ++ (str "\n"));
+
+
+    close_logfile(); dmsg 1 (str "#### closing logfile") in
+
   try
-    let proofname = (string_of_id (Pfedit.get_current_proof_name())) in
     dmsg 1 (str "#### open logfile");
     let methodname = "nocache" in
     open_logfile (proofname ^ "_" ^ methodname);
@@ -2382,15 +2425,14 @@ TACTIC EXTEND inductiveproofautomation
        (pr_constr (pf_concl g)) ++ (str ("\" method=\"" ^ methodname ^ "\">")));
 
     let t = fun () ->(
-     let r = tag_group ("Toplevel") (tag_tclTHENSEQ [(*quickcheck_tactic;*)(super 0)]) g in
-     log_write "<success/>";
-     finished();
+     let r = (*tag_group ("Toplevel")*) (tag_tclTHENSEQ [(*quickcheck_tactic;*)(super 0)]) g in
+     finished "SUCCESS";
      r) in
 
    t()
 
   with e ->
-    (log_write "<fail/>"; finished(); raise e)
+    (finished "FAILURE"; raise e)
 ]
 END
 
