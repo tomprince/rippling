@@ -63,8 +63,18 @@ Note: Open this script in CoqIDE launched from a console. The console will conta
 useful proof search feedback.
 *)
 
-Load "tools.v".
+Require Import tools.
+Require Import discover.
+
 Require Import List.
+Require Export Syntax. (* put after "Import List" for [1;2] style list notation *)
+Require Import Program.
+Require Import Setoid.
+Require Import Bool.
+Require Import Omega.
+Require Import Arith.Compare_dec.
+
+Set Implicit Arguments.
 
 (*
 Before using the "ripple" tactic, we must call the "AddWaveRule" command on each

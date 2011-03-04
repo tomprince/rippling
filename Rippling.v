@@ -1,4 +1,10 @@
 (* Initialises rippling *)
+Create HintDb cache discriminated.
+Create HintDb ripple_basic discriminated.
+Create HintDb ripple_cached discriminated.
+Create HintDb simp discriminated.
+
+Declare ML Module "rippling_plugin".
 
 (* Hides wave annotation type parameters *)
 Set Implicit Arguments.
@@ -14,15 +20,6 @@ Notation "'__' x '__'" := (wave_hole x) (at level 20, right associativity) : typ
 Notation "<| x |>" := (wave_out  x) (at level 20, right associativity) : type_scope.
 Notation ">| x |<" := (wave_in   x) (at level 20, right associativity) : type_scope.
 Notation "& x &" := (wave_sink x) (at level 20, right associativity) : type_scope.
-
-Lemma fertilise_rewrite : forall (A:Type)(x y:A), x = y -> __ x __ = __ y __.
-tauto.
-Qed.
-
-(* FIXME: Hack to tell rippling what annotation functions to use. These should really be loaded from OCaml. *)
-Goal True.
-init_rippling wave_out wave_in wave_hole wave_sink fertilise_rewrite.
-Admitted.
 
 (* Ripples goal to a given *)
 Ltac ripple_to given db :=
