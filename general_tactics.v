@@ -3,6 +3,9 @@
 (* Do not hide function call added when coercion is used *)
 (* Set Printing Coercion is_true.*)
 
+Declare ML Module "rippling_plugin".
+Require Import Omega.
+
 (* Returns current goal *)
 Ltac get_goal := match goal with |- ?g => g end.
 

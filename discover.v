@@ -1,5 +1,7 @@
 (* Some testing on auto discovering obvious lemmas for operators from templates *)
 
+Require Import tools.
+Require Import List.
 Require Import Omega.
 
 Ltac solver2 := admit. (* a very reliable solver! *)
@@ -146,7 +148,6 @@ Ltac idt d := idtac d;discover2 d.
 Ltac appass f :=
 idt (forall x, f (f x) = x).
 
-(*
 Goal forall(T:Type), True. intros.
 ReplaceInTests T nat.
 discover mult.
@@ -162,8 +163,8 @@ length(A:=T)=length(A:=T);
 mult=mult;
 plus=plus;
 S=S;
-cons (A:=T)=cons (A:=T);
-postorder (A:=T)=postorder (A:=T);
+cons (A:=T)=cons (A:=T)
+(* postorder (A:=T)=postorder (A:=T);
 inorder (A:=T)=inorder (A:=T);
 preorder (A:=T)=preorder (A:=T);
 postorder (A:=T)=postorder (A:=T);
@@ -171,6 +172,6 @@ mirror (A:=T)=mirror (A:=T);
 (*min =min ;
 max =max ;*)
 height (A:=T)=height (A:=T);
-num_nodes (A:=T)= num_nodes (A:=T)
+num_nodes (A:=T)= num_nodes (A:=T) *)
 ]).
-*)
+Abort.

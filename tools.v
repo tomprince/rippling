@@ -1,6 +1,4 @@
 (* Setup file for all proof automation tools and other useful things *)
-Declare ML Module "recdef_plugin".
-Declare ML Module "rippling_plugin".
 Require Import List.
 Require Export Syntax. (* put after "Import List" for [1;2] style list notation *)
 Require Import Program.
@@ -14,6 +12,9 @@ Notation bool_eq_dec := bool_dec.
 
 (* Stops line wrapping on debug output*)
 Set Printing Width 10000.
+
+Require Export Rippling.
+Require Export general_tactics.
 
 (* Test lots of examples; useful for when not finding a counterexample is
 expensive e.g. not identifying a program error for the user. Gives counterexample trace *)
@@ -34,9 +35,7 @@ Generator (nat -> nat) [S].
 Generator (nat -> nat -> nat) [plus; mult].
 Admitted.
 
-Load "general_tactics.v".
-Load "rippling.v".
-Load "unit_testing.v".
+Require Import unit_testing.
 
 (* Removes ` notation for proj1_sig *)
 (*Notation "'proj1_sig' x" := (proj1_sig x) (at level 10).*)
@@ -175,10 +174,6 @@ Ltac general :=
 
 Ltac rip := ripple.
 Ltac gen := generalise_goal; intros; irrelevant.
-
-Create HintDb cache discriminated.
-Create HintDb ripple discriminated.
-Create HintDb simp discriminated.
 
 (* destructs any proj1_sig terms in hypotheses *)
 Ltac destruct_proj1_hyp :=
@@ -364,5 +359,3 @@ Ltac hint' lemma solver :=
 Ltac hint lemma := hint' lemma d.
 
 Ltac case_split := case_concl; intros; sub.
-
-Load "discover.v".

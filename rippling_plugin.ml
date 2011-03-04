@@ -430,26 +430,17 @@ END
 
 
 (* FIXME: These references should be loaded from a theory file. Having trouble with module visability *)
-let wave_out = ref (mkRel 1)
-let wave_in = ref (mkRel 1)
-let wave_hole = ref (mkRel 1)
-let wave_sink = ref (mkRel 1)
-let fertilise_rewrite = ref (mkRel 1)
-let nat_type = ref (mkRel 1)
-let natlist_type = ref (mkRel 1)
 
-let contrib_name = "seanw"
-let contrib_dir = [contrib_name]
-let fix_sub_module = "FixSub"
-let utils_module = "Utils"
-let fixsub_module = contrib_dir @ [fix_sub_module]
-let utils_module = contrib_dir @ [utils_module]
-let init_constant dir s = gen_constant contrib_name dir s
-let init_reference dir s = gen_reference contrib_name dir s
+let contrib_name = "rippling"
+let rippling_module = ["Rippling"]
 
-let fixsub = lazy (init_constant fixsub_module "Fix_sub")
-let ex_pi1 = lazy (init_constant utils_module "ex_pi1")
-let ex_pi2 = lazy (init_constant utils_module "ex_pi2")
+let rippling_reference dir s = find_reference contrib_name (contrib_name::dir) s
+let rippling_constant dir s = constr_of_global (rippling_reference dir s)
+
+let wave_out = lazy (rippling_constant rippling_module "wave_out")
+let wave_in = lazy (rippling_constant rippling_module "wave_in")
+let wave_hole = lazy (rippling_constant rippling_module "wave_hole")
+let wave_sink = lazy (rippling_constant rippling_module "wave_sink")
 
 let logic_dir = ["Coq";"Logic";"Decidable"]
 let init_arith_modules = init_modules @ arith_modules
@@ -457,26 +448,29 @@ let coq_modules =
   init_arith_modules @ [logic_dir] @ zarith_base_modules
     @ [["Coq"]]
 
-let init_arith_constant = gen_constant_in_modules "Seanw" init_arith_modules
-let constant = gen_constant_in_modules "Seanw" coq_modules
+let constant = gen_constant_in_modules "rippling" coq_modules
+
+let init_constant dir s = gen_constant contrib_name dir s
+let init_reference dir s = gen_reference contrib_name dir s
 
 let make_ref l s = lazy (init_reference l s)
+let make_const l s = lazy (init_constant l s)
 let well_founded_ref = make_ref ["Init";"Wf"] "Well_founded"
 let acc_ref = make_ref  ["Init";"Wf"] "Acc"
 let acc_inv_ref = make_ref  ["Init";"Wf"] "Acc_inv"
 let fix_sub_ref = make_ref ["subtac";"FixSub"] "Fix_sub"
-let eq_ind = lazy (init_constant ["Init"; "Logic"] "eq")
-let and_ind = lazy (init_constant ["Init"; "Logic"] "and")
-let or_ind = lazy (init_constant ["Init"; "Logic"] "or")
-let iff_ind = lazy (init_constant ["Init"; "Logic"] "iff")
-let natind = lazy (init_constant ["Init"; "Datatypes"] "nat")
-let coq_not = lazy (init_constant ["Init"; "Logic"] "not")
-let coq_True = lazy (init_constant ["Init"; "Logic"] "True")
-let coq_False = lazy (init_constant ["Init"; "Logic"] "False")
+let eq_ind = make_const ["Init"; "Logic"] "eq"
+let and_ind = make_const ["Init"; "Logic"] "and"
+let or_ind = make_const ["Init"; "Logic"] "or"
+let iff_ind = make_const ["Init"; "Logic"] "iff"
+let natind = make_const ["Init"; "Datatypes"] "nat"
+let coq_not = make_const ["Init"; "Logic"] "not"
+let coq_True = make_const ["Init"; "Logic"] "True"
+let coq_False = make_const ["Init"; "Logic"] "False"
 let gen_constant dir s = Coqlib.gen_constant "seanw" dir s
-let eq_ind_r = lazy(gen_constant ["Init"; "Logic"] "eq_ind_r")
-let plus_comm = lazy(gen_constant ["Arith"; "Plus"] "plus_comm")
-let coq_eq_ind_r () = (constant "eq_ind_r")
+let eq_ind_r = make_const ["Init"; "Logic"] "eq_ind_r"
+let plus_comm = make_const ["Arith"; "Plus"] "plus_comm"
+let coq_eq_ind_r = lazy (constant "eq_ind_r")
 let coq_proj1 = lazy (constant "proj1")
 let coq_proj2 = lazy (constant "proj2")
 let coq_sym_eq = lazy (constant "sym_eq")
@@ -760,7 +754,7 @@ let evaluable_of_constr c =
 let find_hole c =
  let rec f r c =
   (match kind_of_term c with
-    App (c,al) when c = !wave_hole -> Some al.(1)
+    App (c,al) when c = (Lazy.force wave_hole) -> Some al.(1)
   | _ -> fold_constr f r c) in
 (*  match fold_constr f None c with Some x -> x | None -> raise Not_found *)
  fold_constr f None c
@@ -769,7 +763,7 @@ let find_hole c =
 let find_sink c =
  let rec f r c =
   (match kind_of_term c with
-    App (c,al) when c = !wave_sink -> Some al.(1)
+    App (c,al) when c = (Lazy.force wave_sink) -> Some al.(1)
   | _ -> fold_constr f r c) in
  match fold_constr f None c with Some x -> x | None -> raise Not_found
 
@@ -778,15 +772,15 @@ let has_sink c = try (ignore (find_sink c); true) with _ -> false
 (* Removes all the differences and annotations from an annotated term *)
 let rec remove_differences annotated =
   match kind_of_term annotated with
-  | App (c,al) when c = !wave_hole or c = !wave_sink -> remove_differences al.(1)
-  | App (c,al) when c = !wave_out or c = !wave_in ->
+  | App (c,al) when c = (Lazy.force wave_hole) or c = (Lazy.force wave_sink) -> remove_differences al.(1)
+  | App (c,al) when c = (Lazy.force wave_out) or c = (Lazy.force wave_in) ->
     (match find_hole al.(1) with Some hole -> remove_differences hole | None -> anomaly "Hole expected in wave front.")
   | _ -> map_constr remove_differences annotated
 
 (* Removes all the annotation functions from an annotated term *)
 let rec remove_annotations annotated =
   match kind_of_term annotated with
-  | App (c,al) when c = !wave_hole or c = !wave_sink or c = !wave_out or c = !wave_in -> remove_annotations al.(1)
+  | App (c,al) when c = (Lazy.force wave_hole) or c = (Lazy.force wave_sink) or c = (Lazy.force wave_out) or c = (Lazy.force wave_in) -> remove_annotations al.(1)
   | _ -> map_constr remove_annotations annotated
 
 (* Finds all the ways a skeleton term can be embedded into an erasure term *)
@@ -804,10 +798,10 @@ let rec annotate2 eq inside_diff erasure skeleton g =
     let term_type = try (pf_type_of g term) with _ -> dummy_type in
     mkApp (annotation, [|term_type; term|]) in
 
-  let mkwaveout t = mkannotated_term !wave_out t in
-  let mkwavehole t = mkannotated_term !wave_hole t in
-  (*let mkwavesink t = mkannotated_term !wave_sink t in*)
-  let mkwavein t = mkannotated_term !wave_in t in
+  let mkwaveout t = mkannotated_term (Lazy.force wave_out) t in
+  let mkwavehole t = mkannotated_term (Lazy.force wave_hole) t in
+  (*let mkwavesink t = mkannotated_term (Lazy.force wave_sink) t in*)
+  let mkwavein t = mkannotated_term (Lazy.force wave_in) t in
 
   (*   dmsg 0 (str "matching " ++ pr_constr erasure ++ str " " ++ pr_constr skeleton); *)
   if eq erasure skeleton then
@@ -815,7 +809,7 @@ let rec annotate2 eq inside_diff erasure skeleton g =
   (* ?1 should not e,g. matches againsts (?1 + x) *)
   else if isMeta skeleton && not (occur_term skeleton erasure) then
     (* Trick: Storing the metavariable as the sink type so we can tell which metavariable matched to which term *)
-    [mkApp (!wave_sink, [|skeleton; erasure|])]
+    [mkApp ((Lazy.force wave_sink), [|skeleton; erasure|])]
   else
     match kind_of_term erasure with
     | App (ef1, ea1) ->
@@ -873,7 +867,7 @@ let annotate erasure skeleton g =
     let rec get acc c =
       (match kind_of_term c with
          (* The sink type stores the metavariable name *)
-         App (c, [|meta; term|]) when c = !wave_sink ->
+         App (c, [|meta; term|]) when c = (Lazy.force wave_sink) ->
           let i = destMeta meta in
           (try
             let sink_contents = assoc i acc in
@@ -932,15 +926,15 @@ let rec string_of_tree t =
 let rec measure_tree wave_dir (c : constr) =
   let f x = Node(Skel, ((Array.fold_left (fun r al -> (measure_tree wave_dir al)::r) [] x))) in
   match kind_of_term c with
-  | App (c,al) when c = !wave_hole -> anomaly "measure_tree: hole unexpectedly found outside of wave front."
-  | App (c,al) when c = !wave_in || c = !wave_out ->
+  | App (c,al) when c = (Lazy.force wave_hole) -> anomaly "measure_tree: hole unexpectedly found outside of wave front."
+  | App (c,al) when c = (Lazy.force wave_in) || c = (Lazy.force wave_out) ->
     (* Create measure tree of the hole inside this wave front. Note: hole could contain other wave fronts/holes *)
     (* Returns the first term found inside a hole and the size of the wave front it was found in. *)
     let find_hole c =
       let result = ref (0, None) in
       let rec f size term =
         match kind_of_term term with
-          App (c,al) when c = !wave_hole -> result := (size, Some al.(1));raise Occur
+          App (c,al) when c = (Lazy.force wave_hole) -> result := (size, Some al.(1));raise Occur
         | _ -> iter_constr (f (size+1)) term
       in ((try f 0 c  with Occur -> ()); !result)
     in
@@ -958,12 +952,12 @@ let rec measure_tree wave_dir (c : constr) =
           (match m with
             Empty -> anomaly "measure_tree: hole unexpectedly returned empty measure tree."
           | Node (_,t) ->
-                Node((if wave_dir = !wave_out then WaveOut wavefront_size else WaveIn wavefront_size ), t)
+                Node((if wave_dir = (Lazy.force wave_out) then WaveOut wavefront_size else WaveIn wavefront_size ), t)
           )
         else (* this wave front is being ignored *)
           m
       )
-  | App (c,al) when c = !wave_sink -> Node(Sink, [])
+  | App (c,al) when c = (Lazy.force wave_sink) -> Node(Sink, [])
   | (Rel _ | Meta _ | Var _   | Sort _ | Const _ | Ind _ | Construct _) -> Node(Skel, [])
   | Cast (c,k,t) -> f [|c; t|]
   | Prod (na,t,c) -> f [|t; c|]
@@ -976,7 +970,7 @@ let rec measure_tree wave_dir (c : constr) =
   | CoFix(ln,(lna,tl,bl)) -> f (Array.append tl bl)
 
 let is_annotation_app a =
-  a = !wave_out || a = !wave_in || a = !wave_sink || a = !wave_hole
+  a = (Lazy.force wave_out) || a = (Lazy.force wave_in) || a = (Lazy.force wave_sink) || a = (Lazy.force wave_hole)
 
 (* Calculate dsum measure from ripple measure tree *)
 let dsum_measure c =
@@ -1009,8 +1003,8 @@ let dsum_measure c =
       | _ -> ());
        List.iter (fun t -> traverse t (depth + 1)) t2)
     in
-   let wo = measure_tree !wave_out c in
-    let wi = measure_tree !wave_in c in
+   let wo = measure_tree (Lazy.force wave_out) c in
+    let wi = measure_tree (Lazy.force wave_in) c in
    traverse wo 0;
    traverse wi 0;
   !measure
@@ -1026,10 +1020,10 @@ let measure_list c =
                       List.iter (fun t -> traverse t (depth + 1)) t2
       in traverse t 0; (Array.to_list a) in
 
-  let out_tree = measure_tree !wave_out c in
+  let out_tree = measure_tree (Lazy.force wave_out) c in
   let out_list = (measure_list2 out_tree) in
 
-  let in_tree = measure_tree !wave_in c in
+  let in_tree = measure_tree (Lazy.force wave_in) c in
   let in_list = measure_list2 in_tree in
 
   let mlist = (rev out_list) @ in_list in
@@ -1187,7 +1181,7 @@ let gen_rewrite_term lft2rgt lhs rewriterule rhs gl =
   (* FIXME: the unification part for finding rewrite rule is broken in that it finds many lhs=>rhs that are the same. This is a hack to filter these rewrites. *)
   if (lhs = rhs) then [] else
 
-  (*  let th = coq_eq_ind_r() in*)
+  (*  let th = Lazy.force coq_eq_ind_r in*)
   let goal = pf_concl gl in
   (*let new_but = Termops.replace_term lhs rhs goal in*)
 
@@ -1212,7 +1206,7 @@ let gen_rewrite_term lft2rgt lhs rewriterule rhs gl =
         mkApp(Lazy.force coq_sym_eq, [|subst_type;rhs;lhs;rewriterule|]) in
 
     (* The refine tactic term that does the rewriting *)
-    let refine_term = (mkApp (coq_eq_ind_r(),
+    let refine_term = (mkApp (Lazy.force coq_eq_ind_r,
       [|subst_type;rhs; subst_fun;Evarutil.mk_new_meta(); lhs;rewriterule_term|])) in
     dmsgc 5 "refine_term" refine_term;
     refine_term)
@@ -1303,7 +1297,7 @@ let auto_add_hint id base g =
     | _ -> ()) in
 
   let add_hints_iff l2r lc n bl =
-    Auto.add_hints true bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, x)) lc)) in
+    Auto.add_hints false bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, x)) lc)) in
 
   if cache_trivial_lemmas then
     (let priority = Some 0 (* "trivial" will only use priority 0 rules *) in
@@ -1457,7 +1451,7 @@ let tclPRINTGOAL m g =
   let num_wave_holes c =
     let rec f r c =
       (match kind_of_term c with
-      App (c,al) when c = !wave_hole -> 1 + (fold_constr f r c)
+      App (c,al) when c = (Lazy.force wave_hole) -> 1 + (fold_constr f r c)
       | _ -> fold_constr f r c) in
     fold_constr f 0 c
 
@@ -1465,7 +1459,7 @@ let can_fertilise annotated_term g =
   (* Returns true when a given side of an annotated equation can be weak fertilised*)
   let can_fertilise_side equation_side =
     match kind_of_term equation_side with
-    App (c,al) when c = !wave_out || c = !wave_in ->
+    App (c,al) when c = (Lazy.force wave_out) || c = (Lazy.force wave_in) ->
       (* Can weak fertilise when head term is a wave front that contains one wave hole *)
       num_wave_holes al.(1) = 1
       (* Can weak fertilise when term has no annotated differences
@@ -2267,11 +2261,6 @@ TACTIC EXTEND rename1
     let i = fresh_id (pf_ids_of_hyps g) (id_of_string ((string_of_id y) ^ postfix)) g in
     Tactics.rename_hyp [(x, i)] g
 ]
-END
-
-TACTIC EXTEND initrippling
-| ["init_rippling" constr(wave_out2) constr(wave_in2) constr(wave_hole2) constr(wave_sink2) constr(fertilise_rewrite2)] -> [
-  wave_out := wave_out2; wave_in:= wave_in2; wave_hole := wave_hole2; wave_sink:= wave_sink2; fertilise_rewrite := fertilise_rewrite2;tclIDTAC ]
 END
 
 (******************************************)

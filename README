@@ -1,4 +1,4 @@
-Inductive proof automation for Coq, version 0.1
+Inductive proof automation for Coq
 by Sean Wilson
 
 This package contains an inductive proof automation plugin for Coq. This automation
@@ -7,37 +7,6 @@ This file explains how to compile the code and run the demo file (see theory/dem
 which includes many examples of theorems that can be automated. See here for documentation
 about how the automation works:
 http://homepages.inf.ed.ac.uk/s0091720/
-
-For installation, you will need SVN and OCaml installed, as well as several OCaml libraries
-you need for compiling Coq, such as liblablgtk2-ocaml, liblablgtk2-ocaml-dev and campl5.
-If there are any compilation problems, consult documentation on how to compile the
-regular Coq source code.
-
-To get everything running, you need to download the Coq source code, copy the plugin
-into the Coq source code folder and then compile Coq. This can be done with the following
-commands:
-
-- First, open the "Makefile" file in a text editor and alter the variables at the top if
-  you are unhappy with any of the installation paths.
-
-- To checkout a version of the Coq source code that is known work with this plugin run:
-  make checkoutcoq
-
-- To copy the plugin into the Coq source code directory run:
-  make copy
-
-- To configure Coq for compiling run:
-  make configurecoq
-
-- Check the output from the last command says everything is fine and Coq IDE will be built.
-
-- To compile Coq with the plugin run:
-  make buildcoq
-
-  This can take 30 minutes or so.
-
-- To run the demo:
-  make demo
 
 These tactics are still in development. The code and the installation process should
 hopefully be simplified in the future.
