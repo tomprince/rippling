@@ -10,6 +10,9 @@ Require Import Arith.Compare_dec.
 Notation nat_eq_dec := eq_nat_decide.
 Notation bool_eq_dec := bool_dec.
 
+(* Stops line wrapping on debug output*)
+Set Printing Width 10000.
+
 (* Test lots of examples; useful for when not finding a counterexample is
 expensive e.g. not identifying a program error for the user. Gives counterexample trace *)
 Ltac qc := intros; quickcheck 0 50 0 1.
@@ -78,7 +81,12 @@ Ltac constant_rhs := match goal with |- ?x = ?y => constant y end.
 
 
 (* Reverts all assumptions. Useful to do this so you can copy/paste the current goal as the conjecture for a new named lemma. *)
-Ltac revert_all := repeat match goal with [ H : _ |- _ ] => revert H end.
+Ltac revert_all :=
+  (* Try to revert the Prop assumptions first so the final goal is cleaner with all the Prop assumptions together *)
+  repeat match goal with [ H : _ |- _ ] =>
+    (let ty := (typeof H) in match ty with Prop => try revert H end) end;
+  (* Now revert the remaining assumptions *)
+  repeat match goal with [ H : _ |- _ ] => revert H end.
 
 (* Displays current goal in a format that can be copy/pasted as a stand alone lemma declaration e.g. Goal (forall x, x = x + 0). *)
 Ltac print_goal :=
@@ -93,8 +101,9 @@ Ltac use_equations :=
   [ R: _ |- _ ] => (rewrite R in * || rewrite <- R in *); clear R; idtac "Used and discarded equation: " R
   end.
 
-(* Like subst, but does not fail when it finds a recursive equation *)
-Ltac sub := repeat (match goal with x : _ |- _ => subst x end).
+(* Like subst, but does not fail when it finds a recursive equation
+   and clears duplicate hypotheses *)
+Ltac sub := (try clear_dup); repeat (match goal with x : _ |- _ => subst x end).
 
 (* Creates a new subgoal that is a copy of the current goal. This is useful
 if you e.g. want to write a hand proof and an automated proof of a theorem
@@ -122,6 +131,25 @@ intros.
 auto_injection.
 auto_injection.
 Admitted.
+
+(* Case splits only sumbool and bool types *)
+Ltac case_eq' arg :=
+  match type of arg with
+  (* Won't call case_eq on sumbool terms to avoid introducing unhelpful
+  equational assumptions *)
+    sumbool _ _ => case arg; intros
+  | bool => case_eq arg; intros
+  end.
+
+(* Case splits anything *)
+Ltac case_eq2 arg :=
+  match type of arg with
+  (* Won't call case_eq on sumbool terms to avoid introducing unhelpful
+  equational assumptions *)
+    sumbool _ _ => case arg; intros
+  | bool => case_eq arg; intros
+  | _ => case_eq arg; intros
+  end.
 
 Ltac auto_discriminate :=
   match goal with
@@ -154,7 +182,12 @@ Create HintDb simp discriminated.
 Ltac destruct_proj1_hyp :=
   repeat
   match goal with
-    H := context [proj1_sig ?R]  |- _ =>
+    H := context [proj1_sig ?R]  |- _ => (* for assumptions of form H := ... *)
+      let p := fresh "p" in
+      let s := fresh "s" in
+      destruct R as [s p];
+      simpl proj1_sig in H
+|    H : context [proj1_sig ?R]  |- _ =>
       let p := fresh "p" in
       let s := fresh "s" in
       destruct R as [s p];
@@ -178,23 +211,35 @@ Ltac recursive_call :=
   elim_rec_proj1;
   ripple.
 
+Ltac recursive_call' :=
+  sub; (* subtitute pattern matching equations *)
+  elim_rec_proj1;
+  ripple'.
+
 (* Simplifies initial Program tactic proof obligations without destroying any
 embeddings *)
 Ltac tidy :=
   (* destruct calls to functions that return subset types *)
   destruct_proj1;
   destruct_proj1_hyp;
-  (* Boby of assumptions like "v := s : list t * list t" is lost if they are
+  (* Body of assumptions like "v := s : list t * list t" is lost if they are
   destructed. substs these first *)
   sub;
   (* destruct subset types and others *)
   safe_destruct;
   sub.
 
+
+(* destruct calls to functions that return subset types only *)
+Ltac tidy' :=
+  destruct_proj1;
+  destruct_proj1_hyp.
+
+
 (* A basic simplification tactic *)
 Ltac simp_basic' :=
  simpl in *;
- unfold not; (* change ~P into P -> False *)
+ (*unfold not;*) (* change ~P into P -> False *)
  intros; (* must intro a var before "case" can be called on it *)
  try case_concl; (* this can introduce implications and equations to the conclusion *)
  intros;
@@ -230,7 +275,7 @@ Ltac simp' :=
   repeat progress
   (
     simp_basic;
-    try use_equations (* try this last as this is unsafe and should be avoided *)
+    try use_equations
   )
   ; remove_n_eq_n (* remove n = n equations as these can be identified as pointless ripple targets *)
   .
@@ -252,13 +297,39 @@ Ltac dt := super 5 (triv) (simp) (fast_qc) 1 with ripple_basic ripple_cached.
 (* same but without quickcheck (useful when you expect quickcheck to take too long) *)
 Ltac dn := super 5 (triv) (simp) (idtac) 1 with ripple_basic ripple_cached.
 (* basic solver that never uses cached lemmas *)
-Ltac d' := super 5 (triv') (simp') (fast_qc) 0 with ripple_basic.
+(*Ltac d' := super 5 (triv') (simp') (fast_qc) 0 with ripple_basic.*)
+
 (* default solver plus initial descriptive counterexample check *)
 Ltac d :=
-  sub (*remove pattern matching equations first first to help quickcheck*);
-  qc;
   try recursive_call; (* try recursive call proof pattern first *)
+  tidy;
+  qc;
   dt.
+(* same except doesn't use cached lemmas *)
+Ltac d' :=
+  try recursive_call'; (* try recursive call proof pattern first *)
+  tidy;
+  qc;
+  super 5 (triv') (simp') (fast_qc) 0 with ripple_basic.
+(* same except it uses cached lemmas but will not cache any itself *)
+Ltac d'' :=
+  try recursive_call; (* try recursive call proof pattern first *)
+  tidy;
+  qc;
+  super 5 (triv) (simp) (fast_qc) 0 with ripple_basic ripple_cached.
+
+Ltac d_use_cache_and_cache_lemmas :=
+  intros; sub; try elim_rec_proj1;
+  super 5 (triv) (simp) (fast_qc) 1 with ripple_basic ripple_cached.
+
+Ltac d_use_cache_but_dont_cache_lemmas :=
+  intros; sub; try elim_rec_proj1;
+  super 5 (triv) (simp) (fast_qc) 0 with ripple_basic ripple_cached.
+
+Ltac d_no_cache_use :=
+  intros; sub; try elim_rec_proj1;
+  super 5 (triv') (simp') (fast_qc) 0 with ripple_basic.
+
 Ltac ps := tidy; d.
 
 Tactic Notation "ind0" := induction_nth 0.
