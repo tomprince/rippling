@@ -142,6 +142,7 @@ let cast_kind_display k =
   match k with
   | VMcast -> "VMcast"
   | DEFAULTcast -> "DEFAULTcast"
+  | REVERTcast -> "REVERTcast"
 
 let constr_display csr =
   let rec term_display c = match kind_of_term c with
@@ -1150,7 +1151,7 @@ let unification_rewrite rewriterule_lhs c2 cl term_to_rewrite gl =
   fold_left
     (fun r x ->
     try
-      ((Unification.w_unify true (pf_env gl) Reduction.CUMUL ~flags:Unification.default_no_delta_unify_flags rewriterule_lhs x cl.evd), x)::r
+      ((Unification.w_unify (pf_env gl) Reduction.CUMUL ~flags:Unification.default_no_delta_unify_flags rewriterule_lhs x cl.evd), x)::r
     with _ -> r)
     [] subterms in
 
@@ -1188,7 +1189,7 @@ let gen_rewrite_term lft2rgt lhs rewriterule rhs gl =
   (* FIXME: ineffecient as this will do n+1 substitute traversals for n occurances *)
   let rec collect_subst n =
     ((*msgheading (string_of_int n);*)
-    try (let t = (subst_term_occ (true,[n])(* replace only at n *) lhs goal) in
+    try (let t = (subst_closed_term_occ (true,[n])(* replace only at n *) lhs goal) in
       t::(collect_subst (n+1)))
     with _ -> [])
   in
@@ -1297,7 +1298,7 @@ let auto_add_hint id base g =
     | _ -> ()) in
 
   let add_hints_iff l2r lc n bl =
-    Auto.add_hints false bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, None, x)) lc)) in
+    Auto.add_hints false bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, Auto.PathAny, x)) lc)) in
 
   if cache_trivial_lemmas then
     (let priority = Some 0 (* "trivial" will only use priority 0 rules *) in
