@@ -1151,7 +1151,7 @@ let unification_rewrite rewriterule_lhs c2 cl term_to_rewrite gl =
   fold_left
     (fun r x ->
     try
-      ((Unification.w_unify (pf_env gl) Reduction.CUMUL ~flags:Unification.default_no_delta_unify_flags rewriterule_lhs x cl.evd), x)::r
+      ((Unification.w_unify (pf_env gl) cl.evd Reduction.CUMUL ~flags:Unification.default_no_delta_unify_flags rewriterule_lhs x), x)::r
     with _ -> r)
     [] subterms in
 
