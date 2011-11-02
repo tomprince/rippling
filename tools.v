@@ -262,7 +262,7 @@ Ltac triv' :=
 Ltac triv :=
   triv';
   (* prove with "trivial". simpl first because only exact matches allowed *)
-  let t := auto_without_core  with cache in (* don't use core *)
+  let t := auto with nocore cache in (* don't use core *)
   (* let t := trivial with cache in (* use core too *) *)
   try solve [simpl; t]
   .

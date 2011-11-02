@@ -2073,11 +2073,6 @@ TACTIC EXTEND AddHint
 | [ "AddHint" ident(id) ] -> [ fun g -> auto_add_hint id (Some ripple_cached_db) g; tclIDTAC g ]
 END
 
-(* "trivial" tactic that does not use the "core" database *)
-TACTIC EXTEND AutoWithoutCore
-| [ "auto_without_core" "with" preident_list(bl) ] -> [ Auto.auto ~use_core_db:false !Auto.default_search_depth [] bl ]
-END
-
 (* A less verbose printer for autorewrite databases *)
 let custom_print_rewrite_hintdb bas =
   ppnl (str "Database " ++ str bas ++ Pp.fnl() ++
