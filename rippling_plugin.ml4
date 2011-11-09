@@ -1298,7 +1298,7 @@ let auto_add_hint id base g =
     | _ -> ()) in
 
   let add_hints_iff l2r lc n bl =
-    Auto.add_hints false bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, Auto.PathAny, x)) lc)) in
+    Auto.add_hints false bl (Auto.HintsResolveEntry (List.map (fun x -> (n, l2r, None, x)) lc)) in
 
   if cache_trivial_lemmas then
     (let priority = Some 0 (* "trivial" will only use priority 0 rules *) in
