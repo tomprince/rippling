@@ -35,8 +35,6 @@ Generator (nat -> nat) [S].
 Generator (nat -> nat -> nat) [plus; mult].
 Admitted.
 
-Require Import unit_testing.
-
 (* Removes ` notation for proj1_sig *)
 (*Notation "'proj1_sig' x" := (proj1_sig x) (at level 10).*)
 
@@ -346,7 +344,6 @@ Tactic Notation "indr3" :=
 Tactic Notation "indr4" :=
   induction_nth 4; try (simp;triv;fail); try ripple.
 
-Ltac should_solve := solve_or_admit d.
 (* Tries to prove a lemma and add it as a rippling hint *)
 Ltac hint' lemma solver :=
 	let C := fresh "c" in
