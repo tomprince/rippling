@@ -1406,6 +1406,7 @@ let lemma_cache ?(add_as_hint=true) prefix solving_tactic base g =
     let ce =
       { Entries.const_entry_body = theorem_term;
         const_entry_type = Some theorem_type;
+        const_entry_secctx = None;
         const_entry_opaque = false}
     in
     ignore (Declare.declare_constant id (Entries.DefinitionEntry ce, Decl_kinds.IsDefinition (Decl_kinds.Scheme)));
